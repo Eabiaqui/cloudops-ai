@@ -78,11 +78,18 @@ export default function Dashboard() {
   const loadAlerts = useCallback(async () => {
     try {
       const result = await api.listAlerts(0, 100);
-      setAlerts(result.data.alerts || []);
-      setError('');
+      if (result && result.data && result.data.alerts) {
+        setAlerts(result.data.alerts);
+        setError('');
+      }
     } catch (err) {
-      setError('Error cargando alertas');
       console.error(err);
+      if (err.cachedData && err.cachedData.alerts) {
+        setAlerts(err.cachedData.alerts);
+        setError('');
+      } else {
+        setError('Error cargando alertas');
+      }
     } finally {
       setLoading(false);
     }
