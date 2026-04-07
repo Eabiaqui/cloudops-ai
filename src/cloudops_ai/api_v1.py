@@ -189,24 +189,24 @@ def get_alert(
     if not alert:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")
 
-    diagnosis_data = None
-    if alert.diagnosis:
-        diagnosis_data = {
-            "diagnosis": alert.diagnosis.diagnosis,
-            "evidence": alert.diagnosis.evidence,
-            "suggested_action": alert.diagnosis.suggested_action,
-            "confidence": alert.diagnosis.confidence,
-        }
-
-    return {
+    # Flatten diagnosis into top-level response
+    response = {
         "id": str(alert.id),
         "rule_name": alert.rule_name,
         "category": alert.category,
         "severity": alert.severity,
         "created_at": alert.created_at.isoformat(),
         "status": alert.status,
-        "diagnosis": diagnosis_data,
     }
+
+    # Add diagnosis fields directly to response
+    if alert.diagnosis:
+        response["diagnosis"] = alert.diagnosis.diagnosis
+        response["evidence"] = alert.diagnosis.evidence
+        response["suggested_action"] = alert.diagnosis.suggested_action
+        response["confidence"] = alert.diagnosis.confidence
+
+    return response
 
 # ============================================================================
 # API KEYS
