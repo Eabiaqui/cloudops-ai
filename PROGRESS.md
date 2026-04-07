@@ -121,6 +121,40 @@ AZURE_SUBSCRIPTION_ID=...
 
 ---
 
+---
+
+### ✅ Week 5 — Frontend Scaffolding (Complete)
+
+**Stack instalado:**
+- React 19 + Vite 8 + TypeScript-ready
+- Tailwind v4 (via @tailwindcss/vite plugin)
+- axios, react-router-dom v7, zustand, recharts
+
+**Pantallas completadas:**
+- `Login.jsx` — split-panel (dark branding + form), login/signup, spinner animado
+- `Dashboard.jsx` — layout con sidebar, stats cards, tabla alertas filtrable, panel detalle slide-in
+- `Sidebar.jsx` — dark sidebar con NavLink activo, logout, items "pronto"
+- `AlertBadge.jsx` — badges severity/category/confidence
+- `api.js` — cliente axios con fallback a `/alerts/recent` del backend actual
+
+**Build:**
+- `npm run build` ✅ sin errores
+- CSS compilado: 6.5kB (Tailwind purgado correctamente)
+- JS bundle: 290kB (incluyendo recharts)
+
+**Deploy:**
+- Pendiente Vercel (Week 6 task)
+- `.env.local` apunta a VPS Oracle (129.153.42.55:8000)
+
+**Next: Week 6 — Dashboard Features**
+- Tabla filtrable con date range picker
+- Alert detail panel slide-out (✅ ya existe, iterar)
+- WebSocket o polling para real-time
+- Recharts: gráfico de alertas por hora
+- Conectar con backend Week 4 (auth real)
+
+---
+
 ## Backlog (Fase 7+)
 
 ### Fase 7 — Real AKS Connectivity + Remediation Agent
