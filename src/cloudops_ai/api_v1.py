@@ -1,9 +1,9 @@
 """FastAPI v1 endpoints."""
 
-from fastapi import APIRouter, Depends, HTTPException, status, Header
+from fastapi import APIRouter, Depends, HTTPException, status, Header, Query
 from sqlalchemy.orm import Session
 from typing import Optional
-from uuid import UUID
+from uuid import UUID, uuid4
 import secrets
 from datetime import datetime
 
@@ -216,7 +216,7 @@ def get_alert(
 @router.patch("/alerts/{alert_id}")
 def update_alert(
     alert_id: str,
-    alert_status: str,
+    alert_status: str = Query(...),
     tenant_id: str = Depends(get_current_tenant),
     authorization: Optional[str] = Header(None),
     db: Session = Depends(get_db),
@@ -244,6 +244,7 @@ def update_alert(
 
     # Log audit trail
     audit = AuditLog(
+        id=str(uuid4()),
         tenant_id=tenant_id,
         user_id=user_id,
         action=AuditAction.ALERT_RESOLVED if alert_status == "resolved" else "alert_acknowledged",
