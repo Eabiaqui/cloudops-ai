@@ -39,7 +39,10 @@ def signup(email: str, password: str, tenant_name: str, db: Session = Depends(ge
     db.add(user)
     db.commit()
 
-    token = create_access_token(tenant_id=tenant.id, user_id=user.id)
+    # Convert string UUID to UUID object for token creation
+    tenant_uuid = UUID(tenant.id) if isinstance(tenant.id, str) else tenant.id
+    user_uuid = UUID(user.id) if isinstance(user.id, str) else user.id
+    token = create_access_token(tenant_id=tenant_uuid, user_id=user_uuid)
     return {
         "access_token": token,
         "tenant_id": str(tenant.id),
@@ -54,7 +57,10 @@ def login(email: str, password: str, db: Session = Depends(get_db)):
     if not user or not verify_password(password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
-    token = create_access_token(tenant_id=user.tenant_id, user_id=user.id)
+    # Convert string UUID to UUID object for token creation
+    tenant_uuid = UUID(user.tenant_id) if isinstance(user.tenant_id, str) else user.tenant_id
+    user_uuid = UUID(user.id) if isinstance(user.id, str) else user.id
+    token = create_access_token(tenant_id=tenant_uuid, user_id=user_uuid)
     return {
         "access_token": token,
         "tenant_id": str(user.tenant_id),
