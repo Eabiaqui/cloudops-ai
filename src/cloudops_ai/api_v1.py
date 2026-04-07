@@ -6,12 +6,18 @@ from typing import Optional
 from uuid import UUID, uuid4
 import secrets
 from datetime import datetime
+import asyncio
 
 from cloudops_ai.db import get_db
 from cloudops_ai.models.orm import User, Tenant, APIKey, Alert, Diagnosis, AuditLog, AuditAction
 from cloudops_ai.auth import hash_password, verify_password, create_access_token, decode_token, hash_api_key, verify_api_key
 from cloudops_ai.agents.classifier import classify_alert
+from cloudops_ai.agents.diagnostics import diagnose
 from cloudops_ai.models.alert import AlertPayload
+import asyncio
+
+# Demo tenant UUID (MVP: all alerts go here)
+DEMO_TENANT_ID = "550e8400-e29b-41d4-a716-446655440000"
 
 router = APIRouter(prefix="/api/v1", tags=["v1"])
 
@@ -21,16 +27,24 @@ router = APIRouter(prefix="/api/v1", tags=["v1"])
 
 @router.post("/auth/signup")
 def signup(email: str, password: str, tenant_name: str, db: Session = Depends(get_db)):
-    """Create new tenant and admin user."""
-    # Create tenant
-    tenant = Tenant(
-        name=tenant_name,
-        api_key=secrets.token_urlsafe(32),
-    )
-    db.add(tenant)
-    db.flush()
-
-    # Create admin user
+    """Create new user in demo tenant (MVP: all users share same tenant)."""
+    # Get demo tenant
+    tenant = db.query(Tenant).filter(Tenant.id == DEMO_TENANT_ID).first()
+    if not tenant:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Demo tenant not initialized. Run: python3 scripts/init_demo_tenant.py"
+        )
+    
+    # Check if user already exists
+    existing_user = db.query(User).filter(User.email == email).first()
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="User already exists"
+        )
+    
+    # Create user in demo tenant
     user = User(
         tenant_id=tenant.id,
         email=email,
@@ -48,7 +62,7 @@ def signup(email: str, password: str, tenant_name: str, db: Session = Depends(ge
         "access_token": token,
         "tenant_id": str(tenant.id),
         "user_id": str(user.id),
-        "api_key": tenant.api_key,
+        "tenant_name": "Demo - CloudOps AI",
     }
 
 @router.post("/auth/login")
@@ -107,13 +121,41 @@ def get_current_tenant(
 # WEBHOOK: Receive alerts
 # ============================================================================
 
+async def _run_diagnostics_background(alert_id: str, classified):
+    """Run diagnostics in background after alert is stored."""
+    # Give DB a moment to settle
+    await asyncio.sleep(0.5)
+    
+    try:
+        diagnosis_result = await diagnose(classified)
+        if diagnosis_result:
+            # Store diagnosis in background
+            from cloudops_ai.db import SessionLocal
+            db = SessionLocal()
+            try:
+                diag = Diagnosis(
+                    id=str(uuid4()),
+                    tenant_id=DEMO_TENANT_ID,
+                    alert_id=alert_id,
+                    diagnosis=diagnosis_result.diagnosis,
+                    evidence=diagnosis_result.evidence,
+                    suggested_action=diagnosis_result.suggested_action,
+                    confidence=diagnosis_result.confidence,
+                )
+                db.add(diag)
+                db.commit()
+            finally:
+                db.close()
+    except Exception as e:
+        pass  # Log would happen in diagnose()
+
+
 @router.post("/webhooks/alert", status_code=status.HTTP_202_ACCEPTED)
 async def receive_alert(
     payload: dict,
-    tenant_id: str = Depends(get_current_tenant),
     db: Session = Depends(get_db),
 ):
-    """Receive alert from Azure Monitor webhook."""
+    """Receive alert from Azure Monitor webhook (no auth needed, always goes to demo tenant)."""
     try:
         alert_payload = AlertPayload.model_validate(payload)
     except Exception as e:
@@ -122,10 +164,10 @@ async def receive_alert(
     # Classify alert
     classified = await classify_alert(alert_payload)
 
-    # Store in DB
+    # Store in demo tenant (MVP: all Azure alerts go here)
     alert = Alert(
-        id=str(UUID()),  # Generate UUID as string for SQLite
-        tenant_id=tenant_id,  # Already a string from Depends
+        id=str(uuid4()),  # Generate UUID as string for SQLite
+        tenant_id=DEMO_TENANT_ID,  # Always demo tenant
         alert_id_external=classified.essentials.alert_id,
         rule_name=classified.essentials.alert_rule,
         category=classified.category,
@@ -136,6 +178,9 @@ async def receive_alert(
     db.add(alert)
     db.commit()
     db.refresh(alert)
+
+    # Run diagnostics in background (don't block webhook response)
+    asyncio.create_task(_run_diagnostics_background(str(alert.id), classified))
 
     return {
         "alert_id": str(alert.id),

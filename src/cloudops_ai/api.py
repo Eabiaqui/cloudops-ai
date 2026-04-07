@@ -4,6 +4,7 @@ import hashlib
 import hmac
 from contextlib import asynccontextmanager
 from typing import Any
+from uuid import UUID
 
 import structlog
 from fastapi import FastAPI, Header, HTTPException, Request, status
@@ -14,9 +15,10 @@ from cloudops_ai.agents.classifier import classify_alert
 from cloudops_ai.agents.diagnostics import diagnose, DIAGNOSABLE
 from cloudops_ai.api_v1 import router as api_v1_router
 from cloudops_ai.config import settings
-from cloudops_ai.db import init_db
+from cloudops_ai.db import init_db, SessionLocal
 from cloudops_ai.logging import configure_logging
 from cloudops_ai.models.alert import AlertPayload
+from cloudops_ai.models.orm import Alert, Tenant
 
 log = structlog.get_logger()
 

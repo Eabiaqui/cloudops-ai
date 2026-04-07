@@ -439,7 +439,7 @@ export default function Dashboard() {
                       {actionInProgress ? '⏳...' : '✓ Resuelta'}
                     </button>
                     <button
-                      onClick={() => handleAlertAction('acknowledged')}
+                      onClick={() => handleAlertAction('escalated')}
                       disabled={actionInProgress}
                       className="flex-1 px-3 py-2 text-xs bg-orange-600/20 text-orange-400 rounded hover:bg-orange-600/30 transition disabled:opacity-50 disabled:cursor-not-allowed"
                     >

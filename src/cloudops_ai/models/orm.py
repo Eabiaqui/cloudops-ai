@@ -27,6 +27,7 @@ class AlertStatus(str, enum.Enum):
     RESOLVED = "resolved"
     SILENCED = "silenced"
     ACKNOWLEDGED = "acknowledged"
+    ESCALATED = "escalated"
 
 class AlertCategory(str, enum.Enum):
     CPU_PRESSURE = "cpu_pressure"
