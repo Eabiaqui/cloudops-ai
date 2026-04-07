@@ -14,6 +14,7 @@ from cloudops_ai.auth import hash_password, verify_password, create_access_token
 from cloudops_ai.agents.classifier import classify_alert
 from cloudops_ai.agents.diagnostics import diagnose
 from cloudops_ai.models.alert import AlertPayload
+from cloudops_ai.integrations.slack_notifier import send_alert_to_slack
 import asyncio
 
 # Demo tenant UUID (MVP: all alerts go here)

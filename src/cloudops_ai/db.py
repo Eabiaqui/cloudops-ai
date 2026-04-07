@@ -21,7 +21,8 @@ DATABASE_URL = os.getenv(
 engine = create_engine(
     DATABASE_URL,
     poolclass=NullPool,
-    echo=False  # Set to True for SQL debugging
+    echo=False,  # Set to True for SQL debugging
+    connect_args={"check_same_thread": False} if DATABASE_URL.startswith("sqlite:") else {}
 )
 
 # Session factory
@@ -46,10 +47,11 @@ def init_db():
 
 @event.listens_for(engine, "connect")
 def set_sqlite_pragma(dbapi_conn, connection_record):
-    """Enable foreign keys and set pragmas for SQLite."""
+    """Enable foreign keys, WAL mode, and set pragmas for SQLite."""
     if DATABASE_URL.startswith("sqlite:"):
         cursor = dbapi_conn.cursor()
         cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.execute("PRAGMA journal_mode=WAL")  # Enable WAL mode to prevent locking issues
         cursor.close()
     else:
         # PostgreSQL — set timezone
