@@ -10,6 +10,7 @@ from fastapi import FastAPI, Header, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 
 from cloudops_ai.agents.classifier import classify_alert
+from cloudops_ai.agents.diagnostics import diagnose, DIAGNOSABLE
 from cloudops_ai.config import settings
 from cloudops_ai.logging import configure_logging
 from cloudops_ai.models.alert import AlertPayload
@@ -78,15 +79,27 @@ async def receive_alert(
 
     classified = await classify_alert(payload)
 
-    result = {
+    result: dict = {
         "alert_rule": classified.essentials.alert_rule,
         "category": classified.category,
         "confidence": classified.confidence,
         "severity": classified.severity_normalized,
         "reasoning": classified.reasoning,
         "processed_at": classified.processed_at.isoformat(),
+        "diagnosis": None,
     }
-    _recent_alerts.append(result)
 
-    log.info("alert.processed", **result)
+    if classified.category in DIAGNOSABLE:
+        diagnosis = await diagnose(classified)
+        if diagnosis:
+            result["diagnosis"] = {
+                "diagnosis": diagnosis.diagnosis,
+                "evidence": diagnosis.evidence,
+                "suggested_action": diagnosis.suggested_action,
+                "confidence": diagnosis.confidence,
+                "summary": diagnosis.summary,
+            }
+
+    _recent_alerts.append(result)
+    log.info("alert.processed", alert_rule=result["alert_rule"], category=result["category"])
     return JSONResponse(content=result, status_code=status.HTTP_202_ACCEPTED)
