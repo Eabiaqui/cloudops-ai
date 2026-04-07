@@ -5,9 +5,10 @@ from sqlalchemy.orm import Session
 from typing import Optional
 from uuid import UUID
 import secrets
+from datetime import datetime
 
 from cloudops_ai.db import get_db
-from cloudops_ai.models.orm import User, Tenant, APIKey, Alert, Diagnosis
+from cloudops_ai.models.orm import User, Tenant, APIKey, Alert, Diagnosis, AuditLog, AuditAction
 from cloudops_ai.auth import hash_password, verify_password, create_access_token, decode_token, hash_api_key, verify_api_key
 from cloudops_ai.agents.classifier import classify_alert
 from cloudops_ai.models.alert import AlertPayload
@@ -207,6 +208,174 @@ def get_alert(
         response["confidence"] = alert.diagnosis.confidence
 
     return response
+
+# ============================================================================
+# ALERT ACTIONS
+# ============================================================================
+
+@router.patch("/alerts/{alert_id}")
+def update_alert(
+    alert_id: str,
+    alert_status: str,
+    tenant_id: str = Depends(get_current_tenant),
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+):
+    """Update alert status (resolved, acknowledged, escalated)."""
+    alert = db.query(Alert).filter(
+        Alert.id == alert_id,
+        Alert.tenant_id == tenant_id,
+    ).first()
+
+    if not alert:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")
+
+    # Extract user_id from JWT token if available
+    user_id = None
+    if authorization and authorization.startswith("Bearer "):
+        token_data = decode_token(authorization.split(" ")[1])
+        if token_data:
+            user_id = token_data.user_id
+
+    alert.status = alert_status
+    if alert_status == "resolved":
+        alert.resolved_at = datetime.utcnow()
+    db.commit()
+
+    # Log audit trail
+    audit = AuditLog(
+        tenant_id=tenant_id,
+        user_id=user_id,
+        action=AuditAction.ALERT_RESOLVED if alert_status == "resolved" else "alert_acknowledged",
+        resource_type="alert",
+        resource_id=alert_id,
+        details={"new_status": alert_status, "previous_status": alert.status},
+    )
+    db.add(audit)
+    db.commit()
+
+    return {
+        "id": str(alert.id),
+        "status": alert.status,
+        "resolved_at": alert.resolved_at.isoformat() if alert.resolved_at else None
+    }
+
+# ============================================================================
+# INVENTORY & EXPORT
+# ============================================================================
+
+@router.get("/inventory")
+def get_inventory(
+    tenant_id: str = Depends(get_current_tenant),
+    db: Session = Depends(get_db),
+):
+    """Get resource inventory from alerts."""
+    alerts = db.query(Alert).filter(Alert.tenant_id == tenant_id).all()
+    
+    resources = {}
+    for alert in alerts:
+        payload = alert.payload_raw if isinstance(alert.payload_raw, dict) else {}
+        resource = payload.get("resource", "unknown")
+        if resource not in resources:
+            resources[resource] = {"name": resource, "alert_count": 0, "severity": "info"}
+        resources[resource]["alert_count"] += 1
+        if alert.severity == "critical":
+            resources[resource]["severity"] = "critical"
+    
+    return {"resources": list(resources.values()), "total": len(resources)}
+
+@router.get("/inventory/export")
+def export_inventory(
+    format: str = "json",
+    tenant_id: str = Depends(get_current_tenant),
+    db: Session = Depends(get_db),
+):
+    """Export inventory as JSON or CSV."""
+    alerts = db.query(Alert).filter(Alert.tenant_id == tenant_id).all()
+    
+    resources = {}
+    for alert in alerts:
+        payload = alert.payload_raw if isinstance(alert.payload_raw, dict) else {}
+        resource = payload.get("resource", "unknown")
+        if resource not in resources:
+            resources[resource] = {"name": resource, "alerts": []}
+        resources[resource]["alerts"].append({
+            "rule": alert.rule_name,
+            "category": alert.category,
+            "severity": alert.severity,
+        })
+    
+    if format == "csv":
+        import csv
+        import io
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["Resource", "Alert Count", "Categories", "Max Severity"])
+        for resource, data in resources.items():
+            categories = set(a["category"] for a in data["alerts"])
+            severities = [a["severity"] for a in data["alerts"]]
+            severity_order = {"info": 0, "warning": 1, "error": 2, "critical": 3}
+            max_severity = max(severities, key=lambda s: severity_order.get(s, 0))
+            writer.writerow([resource, len(data["alerts"]), ",".join(categories), max_severity])
+        return {"format": "csv", "data": output.getvalue()}
+    
+    return {"format": "json", "resources": resources}
+
+# ============================================================================
+# SECURITY SCAN
+# ============================================================================
+
+@router.post("/security-scan")
+def run_security_scan(
+    tenant_id: str = Depends(get_current_tenant),
+    db: Session = Depends(get_db),
+):
+    """Run security scan for deprecated/risky resources."""
+    alerts = db.query(Alert).filter(Alert.tenant_id == tenant_id).all()
+    
+    scan_results = {
+        "deprecated_resources": [],
+        "security_risks": [],
+        "recommendations": [],
+        "scan_timestamp": datetime.utcnow().isoformat(),
+    }
+    
+    # Check for deprecated patterns
+    deprecated_keywords = ["old", "legacy", "v1", "deprecated"]
+    for alert in alerts:
+        payload = alert.payload_raw if isinstance(alert.payload_raw, dict) else {}
+        resource_name = payload.get("resource", "")
+        if any(keyword in resource_name.lower() for keyword in deprecated_keywords):
+            scan_results["deprecated_resources"].append({
+                "resource": resource_name,
+                "reason": "Matches deprecated naming pattern",
+                "severity": "warning",
+            })
+    
+    # Security risks from alerts
+    critical_alerts = [a for a in alerts if a.severity == "critical"]
+    if len(critical_alerts) > 3:
+        scan_results["security_risks"].append({
+            "type": "high_alert_volume",
+            "description": f"{len(critical_alerts)} critical alerts active",
+            "risk_level": "high",
+        })
+    
+    # Recommendations
+    if scan_results["deprecated_resources"]:
+        scan_results["recommendations"].append(
+            "Plan migration away from deprecated resources"
+        )
+    if scan_results["security_risks"]:
+        scan_results["recommendations"].append(
+            "Investigate and remediate critical alerts immediately"
+        )
+    if len(alerts) > 10:
+        scan_results["recommendations"].append(
+            "Consider implementing alert fatigue reduction strategies"
+        )
+    
+    return scan_results
 
 # ============================================================================
 # API KEYS

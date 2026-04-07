@@ -36,6 +36,10 @@ export const api = {
     client.get('/api/v1/alerts', { params: { skip, limit } }),
   getAlert: (alertId) =>
     client.get(`/api/v1/alerts/${alertId}`),
+  updateAlert: (alertId, status) =>
+    client.patch(`/api/v1/alerts/${alertId}`, null, {
+      params: { alert_status: status }
+    }),
 
   // Fallback: legacy endpoint
   recent: () =>
@@ -46,6 +50,14 @@ export const api = {
     client.post('/api/v1/api-keys', null, {
       params: { description }
     }),
+
+  // Inventory & Security
+  getInventory: () =>
+    client.get('/api/v1/inventory'),
+  exportInventory: (format = 'json') =>
+    client.get('/api/v1/inventory/export', { params: { format } }),
+  runSecurityScan: () =>
+    client.post('/api/v1/security-scan'),
 
   // Health
   health: () =>

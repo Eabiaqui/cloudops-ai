@@ -73,6 +73,7 @@ export default function Dashboard() {
   const [error, setError] = useState('');
   const [selected, setSelected] = useState(null);
   const [filter, setFilter] = useState('all');
+  const [actionInProgress, setActionInProgress] = useState(false);
 
   const loadAlerts = useCallback(async () => {
     try {
@@ -98,6 +99,23 @@ export default function Dashboard() {
       setLoadingDetail(false);
     }
   }, []);
+
+  const handleAlertAction = useCallback(async (status) => {
+    if (!selected) return;
+    setActionInProgress(true);
+    try {
+      await api.updateAlert(selected.id, status);
+      // Reload alerts and detail
+      await loadAlerts();
+      await loadAlertDetail(selected.id);
+      setError('');
+    } catch (err) {
+      setError(`Error al actualizar alerta: ${err.message}`);
+      console.error('Error updating alert:', err);
+    } finally {
+      setActionInProgress(false);
+    }
+  }, [selected, loadAlerts, loadAlertDetail]);
 
   useEffect(() => {
     loadAlerts();
@@ -413,11 +431,19 @@ export default function Dashboard() {
                   </div>
 
                   <div className="px-4 py-3 border-t border-gray-700 bg-gray-700/30 flex gap-2">
-                    <button className="flex-1 px-3 py-2 text-xs bg-green-600/20 text-green-400 rounded hover:bg-green-600/30 transition">
-                      ✓ Resuelta
+                    <button
+                      onClick={() => handleAlertAction('resolved')}
+                      disabled={actionInProgress || selected.status === 'resolved'}
+                      className="flex-1 px-3 py-2 text-xs bg-green-600/20 text-green-400 rounded hover:bg-green-600/30 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {actionInProgress ? '⏳...' : '✓ Resuelta'}
                     </button>
-                    <button className="flex-1 px-3 py-2 text-xs bg-orange-600/20 text-orange-400 rounded hover:bg-orange-600/30 transition">
-                      ⬆ Escalar
+                    <button
+                      onClick={() => handleAlertAction('acknowledged')}
+                      disabled={actionInProgress}
+                      className="flex-1 px-3 py-2 text-xs bg-orange-600/20 text-orange-400 rounded hover:bg-orange-600/30 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {actionInProgress ? '⏳...' : '⬆ Escalar'}
                     </button>
                   </div>
                 </div>
