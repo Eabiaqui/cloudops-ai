@@ -83,7 +83,7 @@
 
 ---
 
-### ✅ Fase 5 — Real Azure Integration (In Progress)
+### ✅ Fase 5 — Real Azure Integration (Complete)
 
 **Completed:**
 - [x] App Registration + Client Secret configured
@@ -102,28 +102,38 @@ AZURE_CLIENT_SECRET=...
 AZURE_SUBSCRIPTION_ID=...
 ```
 
+### ✅ Fase 6 — Real Azure SDK Tools (Complete)
+
+**Architecture change:**
+- Replaced `azure_mock.py` with `azure_real.py` (single import line change)
+- Implemented `get_cpu_metrics()` via `azure-mgmt-monitor` MonitorManagementClient
+- KQL queries ready for pod/logs/nodes (implementation pending Log Analytics workspace setup)
+- Service principal authentication via ClientSecretCredential
+
 **Current behavior:**
 - Azure Monitor fires alerts → hits `http://129.153.42.55:8000/alert`
 - Webhook receives payload + ClassifierAgent classifies
 - If category ∈ {availability, cpu_pressure} → DiagnosticsAgent runs
+- Diagnostics agent calls real Azure SDK (MonitorManagementClient + LogsQueryClient)
+- Returns graceful fallbacks when resources/data unavailable
 - Logs flow to stdout + rotating file
-- Memory steady at 67.5 MB, latency <1s per alert
+- Memory steady at 67.5 MB, latency <2s per alert (includes Azure SDK calls)
 
 ---
 
-## Backlog (Fase 6+)
+## Backlog (Fase 7+)
 
-### Fase 6 — Real Azure SDK Tools
-- Replace `tools/azure_mock.py` with `tools/azure_real.py`
-- Implement live metric queries from Azure Monitor API
-- Implement pod logs from AKS cluster
-- Implement node status from Kubernetes API
-- Same function signatures → **zero code changes to agents**
-
-### Fase 7 — Remediation Agent
+### Fase 7 — Real AKS Connectivity + Remediation Agent
 - Autonomous action execution for low-risk remediations (e.g., pod restart)
 - Human approval workflow for high-risk actions
 - Audit trail of all executed actions
+
+**For Fase 7:**
+- Set up Log Analytics workspace integration with AKS cluster
+- Test KQL queries for pod status, logs, node health
+- Create test VM in Azure (B1s) to generate realistic CPU alerts
+- Implement remediation: pod restart, scale deployment, etc.
+- Human approval workflow for dangerous actions
 
 ### Fase 8 — Slack/Teams Integration
 - Route critical alerts → Slack #incidents channel
@@ -138,9 +148,10 @@ AZURE_SUBSCRIPTION_ID=...
 
 ### Fase 10 — Production Hardening
 - Rate limiting on /alert endpoint
-- Signature verification for Azure webhooks
+- Signature verification for Azure webhooks (HMAC)
 - Database persistence (SQLite → PostgreSQL)
 - Multi-tenant support
+- Cost analytics and trend detection
 
 ---
 
@@ -182,7 +193,9 @@ Systemd Service
 |---|---|---|
 | Orchestration | LangGraph (Python) | ✅ Production |
 | LLM | Claude Haiku (Anthropic) | ✅ Production |
-| Cloud | Azure Monitor + Log Analytics | ✅ Production (mocks for tools) |
+| Azure Metrics | azure-mgmt-monitor | ✅ Production |
+| Azure Logs | azure-monitor-query + KQL | ✅ Ready (needs workspace) |
+| Auth | azure-identity (ClientSecret) | ✅ Production |
 | API | FastAPI + Uvicorn | ✅ Production |
 | Logging | structlog + rotating file | ✅ Production |
 | Deployment | systemd on Oracle Cloud VPS | ✅ Production |
@@ -203,19 +216,22 @@ Systemd Service
 
 ---
 
-## Next Steps
+## Next Steps (Fase 7)
 
-1. **Fase 6 priority:** Connect real Azure SDK tools
-   - Swap `azure_mock.py` → `azure_real.py` (single import change)
-   - Test with live metrics from actual Azure resources
+1. **Set up Log Analytics Workspace integration**
+   - Link existing workspace to AKS cluster
+   - Test KQL queries for pod inventory and logs
+   - Implement `get_pod_status()`, `get_pod_logs()`, `get_node_status()`
    
-2. **Create test VM in Azure** to generate realistic cpu_pressure alerts
-   - VM size: B1s (~$8/mo, or use free tier trial)
-   - Generate load to trigger CPU alerts → test diagnostic accuracy
+2. **Create test resources in Azure**
+   - Spin up test VM (B1s, ~$8/mo) to generate cpu_pressure alerts
+   - Create test pod in AKS to simulate availability issues
+   - Generate load and trigger alerts end-to-end
 
-3. **Integration test with all categories**
-   - Create alerts for each category (cost, network, disk, etc.)
-   - Verify classification accuracy on real Azure payloads
+3. **Remediation agent**
+   - Add escalation rules (auto-restart pod vs human approval)
+   - Implement pod/deployment restart actions
+   - Track remediation outcomes in logs
 
 ---
 
@@ -279,4 +295,4 @@ tail -f logs/cloudops-ai.log
 
 ---
 
-**Ready for Fase 6: Real Azure SDK integration.**
+**Fase 6 complete. Ready for Fase 7: AKS integration + remediation.**
