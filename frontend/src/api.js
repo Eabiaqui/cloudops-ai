@@ -21,25 +21,31 @@ client.interceptors.request.use((config) => {
 });
 
 export const api = {
-  // Auth (Week 4 backend endpoints)
+  // Auth — query params format
   signup: (email, password, tenantName) =>
-    client.post('/api/v1/auth/signup', { email, password, tenant_name: tenantName }),
+    client.post('/api/v1/auth/signup', null, {
+      params: { email, password, tenant_name: tenantName }
+    }),
   login: (email, password) =>
-    client.post('/api/v1/auth/login', { email, password }),
+    client.post('/api/v1/auth/login', null, {
+      params: { email, password }
+    }),
 
-  // Alerts (Week 4 backend endpoints)
+  // Alerts
   listAlerts: (skip = 0, limit = 100) =>
     client.get('/api/v1/alerts', { params: { skip, limit } }),
   getAlert: (alertId) =>
     client.get(`/api/v1/alerts/${alertId}`),
 
-  // Fallback: current public endpoint (Fase 1-6 backend)
+  // Fallback: legacy endpoint
   recent: () =>
     client.get('/alerts/recent'),
 
   // API Keys
   generateApiKey: (description) =>
-    client.post('/api/v1/api-keys', { description }),
+    client.post('/api/v1/api-keys', null, {
+      params: { description }
+    }),
 
   // Health
   health: () =>
