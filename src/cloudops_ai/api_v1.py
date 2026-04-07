@@ -480,3 +480,50 @@ def generate_api_key(
 def health():
     """Health check."""
     return {"status": "ok", "version": "0.1.0"}
+
+
+# ─── INVENTORY ───────────────────────────────────────────
+from .tools.azure_mock_inventory import get_inventory, get_subscriptions, get_resource_groups
+import csv, io
+from fastapi.responses import StreamingResponse
+
+@router.get("/inventory")
+async def list_inventory(
+    subscription: str = None,
+    resource_group: str = None,
+    resource_type: str = None,
+    tenant=Depends(get_current_tenant)
+):
+    resources = get_inventory(subscription, resource_group, resource_type)
+    return {
+        "total": len(resources),
+        "subscriptions": get_subscriptions(),
+        "resource_groups": get_resource_groups(subscription),
+        "resources": resources
+    }
+
+@router.get("/inventory/export")
+async def export_inventory(
+    format: str = "csv",
+    subscription: str = None,
+    resource_group: str = None,
+    resource_type: str = None,
+    tenant=Depends(get_current_tenant)
+):
+    resources = get_inventory(subscription, resource_group, resource_type)
+    date_str = datetime.utcnow().strftime("%Y-%m-%d")
+
+    if format == "csv":
+        output = io.StringIO()
+        writer = csv.DictWriter(output, fieldnames=["name","type","subscription_id","resource_group","status","location"])
+        writer.writeheader()
+        for r in resources:
+            writer.writerow({k: r.get(k,"") for k in ["name","type","subscription_id","resource_group","status","location"]})
+        output.seek(0)
+        return StreamingResponse(
+            io.BytesIO(output.getvalue().encode()),
+            media_type="text/csv",
+            headers={"Content-Disposition": f"attachment; filename=qhunu-inventory-{date_str}.csv"}
+        )
+
+    return {"error": "format must be csv"}
