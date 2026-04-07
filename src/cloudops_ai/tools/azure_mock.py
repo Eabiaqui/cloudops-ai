@@ -95,3 +95,149 @@ def get_node_status(resource_id: str) -> list[dict]:
         {"name": "aks-nodepool1-002", "status": "Ready",    "cpu_capacity": "4",  "mem_capacity": "8Gi",  "mem_allocatable": "7.4Gi"},
         {"name": "aks-nodepool1-003", "status": "NotReady", "cpu_capacity": "4",  "mem_capacity": "8Gi",  "mem_allocatable": "0Gi"},
     ]
+
+
+# ── Inventory tools ─────────────────────────────────────────────────────────────────
+
+def get_inventory(
+    subscription_id: str | None = None,
+    resource_group: str | None = None,
+    resource_type: str | None = None,
+) -> list[dict]:
+    """Return Azure resource inventory (VMs, AKS, Storage, App Services, etc.).
+    
+    Args:
+        subscription_id: Filter by subscription (optional)
+        resource_group: Filter by resource group (optional)
+        resource_type: Filter by type (VirtualMachine, KubernetesService, StorageAccount, etc.) (optional)
+    
+    Returns:
+        List of resource dicts with fields: id, name, type, subscription_id, resource_group, status, location
+    """
+    # Mock inventory across multiple subscriptions and resource groups
+    all_resources = [
+        # Subscription: prod-sub-1
+        {
+            "id": "/subscriptions/prod-sub-1/resourceGroups/prod-rg/providers/Microsoft.Compute/virtualMachines/api-prod-vm-01",
+            "name": "api-prod-vm-01",
+            "type": "VirtualMachine",
+            "subscription_id": "prod-sub-1",
+            "resource_group": "prod-rg",
+            "status": "Running",
+            "location": "eastus",
+            "size": "Standard_D4s_v3",
+        },
+        {
+            "id": "/subscriptions/prod-sub-1/resourceGroups/prod-rg/providers/Microsoft.Compute/virtualMachines/web-prod-vm-02",
+            "name": "web-prod-vm-02",
+            "type": "VirtualMachine",
+            "subscription_id": "prod-sub-1",
+            "resource_group": "prod-rg",
+            "status": "Running",
+            "location": "eastus",
+            "size": "Standard_D2s_v3",
+        },
+        {
+            "id": "/subscriptions/prod-sub-1/resourceGroups/prod-rg/providers/Microsoft.ContainerService/managedClusters/aks-prod-cluster",
+            "name": "aks-prod-cluster",
+            "type": "KubernetesService",
+            "subscription_id": "prod-sub-1",
+            "resource_group": "prod-rg",
+            "status": "Succeeded",
+            "location": "eastus",
+            "kubernetesVersion": "1.28.5",
+        },
+        {
+            "id": "/subscriptions/prod-sub-1/resourceGroups/prod-rg/providers/Microsoft.Storage/storageAccounts/prodstorageacc01",
+            "name": "prodstorageacc01",
+            "type": "StorageAccount",
+            "subscription_id": "prod-sub-1",
+            "resource_group": "prod-rg",
+            "status": "Available",
+            "location": "eastus",
+            "kind": "StorageV2",
+        },
+        {
+            "id": "/subscriptions/prod-sub-1/resourceGroups/prod-rg/providers/Microsoft.Web/sites/api-prod-app",
+            "name": "api-prod-app",
+            "type": "AppService",
+            "subscription_id": "prod-sub-1",
+            "resource_group": "prod-rg",
+            "status": "Running",
+            "location": "eastus",
+            "appServicePlan": "ProdPlan-01",
+        },
+        {
+            "id": "/subscriptions/prod-sub-1/resourceGroups/prod-rg/providers/Microsoft.DBforPostgreSQL/servers/db-prod-pg",
+            "name": "db-prod-pg",
+            "type": "PostgreSQLServer",
+            "subscription_id": "prod-sub-1",
+            "resource_group": "prod-rg",
+            "status": "Ready",
+            "location": "eastus",
+            "version": "14",
+        },
+        # Subscription: dev-sub-1
+        {
+            "id": "/subscriptions/dev-sub-1/resourceGroups/dev-rg/providers/Microsoft.Compute/virtualMachines/api-dev-vm-01",
+            "name": "api-dev-vm-01",
+            "type": "VirtualMachine",
+            "subscription_id": "dev-sub-1",
+            "resource_group": "dev-rg",
+            "status": "Running",
+            "location": "westus2",
+            "size": "Standard_B2s",
+        },
+        {
+            "id": "/subscriptions/dev-sub-1/resourceGroups/dev-rg/providers/Microsoft.Storage/storageAccounts/devstorageacc01",
+            "name": "devstorageacc01",
+            "type": "StorageAccount",
+            "subscription_id": "dev-sub-1",
+            "resource_group": "dev-rg",
+            "status": "Available",
+            "location": "westus2",
+            "kind": "StorageV2",
+        },
+        {
+            "id": "/subscriptions/dev-sub-1/resourceGroups/dev-rg/providers/Microsoft.Insights/components/app-insights-dev",
+            "name": "app-insights-dev",
+            "type": "ApplicationInsights",
+            "subscription_id": "dev-sub-1",
+            "resource_group": "dev-rg",
+            "status": "Active",
+            "location": "westus2",
+            "applicationType": "web",
+        },
+        # Subscription: staging-sub-1
+        {
+            "id": "/subscriptions/staging-sub-1/resourceGroups/staging-rg/providers/Microsoft.Compute/virtualMachines/api-staging-vm-01",
+            "name": "api-staging-vm-01",
+            "type": "VirtualMachine",
+            "subscription_id": "staging-sub-1",
+            "resource_group": "staging-rg",
+            "status": "Stopped",
+            "location": "northeurope",
+            "size": "Standard_D2s_v3",
+        },
+        {
+            "id": "/subscriptions/staging-sub-1/resourceGroups/staging-rg/providers/Microsoft.ContainerRegistry/registries/stagingacr01",
+            "name": "stagingacr01",
+            "type": "ContainerRegistry",
+            "subscription_id": "staging-sub-1",
+            "resource_group": "staging-rg",
+            "status": "Active",
+            "location": "northeurope",
+            "sku": "Premium",
+        },
+    ]
+    
+    # Apply filters
+    filtered = all_resources
+    if subscription_id:
+        filtered = [r for r in filtered if r["subscription_id"] == subscription_id]
+    if resource_group:
+        filtered = [r for r in filtered if r["resource_group"] == resource_group]
+    if resource_type:
+        filtered = [r for r in filtered if r["type"] == resource_type]
+    
+    return filtered

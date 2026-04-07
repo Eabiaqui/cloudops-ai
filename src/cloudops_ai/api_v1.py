@@ -15,7 +15,10 @@ from cloudops_ai.agents.classifier import classify_alert
 from cloudops_ai.agents.diagnostics import diagnose
 from cloudops_ai.models.alert import AlertPayload
 from cloudops_ai.integrations.slack_notifier import send_alert_to_slack
+from cloudops_ai.tools.azure_mock import get_inventory as get_azure_inventory
 import asyncio
+import csv
+import io
 
 # Demo tenant UUID (MVP: all alerts go here)
 DEMO_TENANT_ID = "550e8400-e29b-41d4-a716-446655440000"
@@ -314,59 +317,76 @@ def update_alert(
 @router.get("/inventory")
 def get_inventory(
     tenant_id: str = Depends(get_current_tenant),
+    subscription_id: Optional[str] = None,
+    resource_group: Optional[str] = None,
+    resource_type: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
-    """Get resource inventory from alerts."""
-    alerts = db.query(Alert).filter(Alert.tenant_id == tenant_id).all()
+    """Get resource inventory from Azure (mock or real)."""
+    resources = get_azure_inventory(
+        subscription_id=subscription_id,
+        resource_group=resource_group,
+        resource_type=resource_type,
+    )
     
-    resources = {}
+    # Enrich with alert counts
+    alerts = db.query(Alert).filter(Alert.tenant_id == tenant_id).all()
+    alert_counts = {}
     for alert in alerts:
         payload = alert.payload_raw if isinstance(alert.payload_raw, dict) else {}
         resource = payload.get("resource", "unknown")
-        if resource not in resources:
-            resources[resource] = {"name": resource, "alert_count": 0, "severity": "info"}
-        resources[resource]["alert_count"] += 1
-        if alert.severity == "critical":
-            resources[resource]["severity"] = "critical"
+        if resource not in alert_counts:
+            alert_counts[resource] = 0
+        alert_counts[resource] += 1
     
-    return {"resources": list(resources.values()), "total": len(resources)}
+    for resource in resources:
+        resource["alert_count"] = alert_counts.get(resource.get("name"), 0)
+    
+    return {"resources": resources, "total": len(resources)}
 
 @router.get("/inventory/export")
 def export_inventory(
     format: str = "json",
+    subscription_id: Optional[str] = None,
+    resource_group: Optional[str] = None,
+    resource_type: Optional[str] = None,
     tenant_id: str = Depends(get_current_tenant),
     db: Session = Depends(get_db),
 ):
     """Export inventory as JSON or CSV."""
-    alerts = db.query(Alert).filter(Alert.tenant_id == tenant_id).all()
+    resources = get_azure_inventory(
+        subscription_id=subscription_id,
+        resource_group=resource_group,
+        resource_type=resource_type,
+    )
     
-    resources = {}
+    # Enrich with alert counts
+    alerts = db.query(Alert).filter(Alert.tenant_id == tenant_id).all()
+    alert_counts = {}
     for alert in alerts:
         payload = alert.payload_raw if isinstance(alert.payload_raw, dict) else {}
         resource = payload.get("resource", "unknown")
-        if resource not in resources:
-            resources[resource] = {"name": resource, "alerts": []}
-        resources[resource]["alerts"].append({
-            "rule": alert.rule_name,
-            "category": alert.category,
-            "severity": alert.severity,
-        })
+        if resource not in alert_counts:
+            alert_counts[resource] = 0
+        alert_counts[resource] += 1
     
-    if format == "csv":
-        import csv
-        import io
+    if format.lower() == "csv":
         output = io.StringIO()
         writer = csv.writer(output)
-        writer.writerow(["Resource", "Alert Count", "Categories", "Max Severity"])
-        for resource, data in resources.items():
-            categories = set(a["category"] for a in data["alerts"])
-            severities = [a["severity"] for a in data["alerts"]]
-            severity_order = {"info": 0, "warning": 1, "error": 2, "critical": 3}
-            max_severity = max(severities, key=lambda s: severity_order.get(s, 0))
-            writer.writerow([resource, len(data["alerts"]), ",".join(categories), max_severity])
-        return {"format": "csv", "data": output.getvalue()}
+        writer.writerow(["Name", "Type", "Subscription", "Resource Group", "Status", "Location", "Alert Count"])
+        for resource in resources:
+            writer.writerow([
+                resource.get("name", ""),
+                resource.get("type", ""),
+                resource.get("subscription_id", ""),
+                resource.get("resource_group", ""),
+                resource.get("status", ""),
+                resource.get("location", ""),
+                alert_counts.get(resource.get("name"), 0),
+            ])
+        return {"format": "csv", "data": output.getvalue(), "filename": "inventory.csv"}
     
-    return {"format": "json", "resources": resources}
+    return {"format": "json", "resources": resources, "total": len(resources)}
 
 # ============================================================================
 # SECURITY SCAN

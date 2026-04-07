@@ -133,7 +133,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     loadAlerts();
-    const interval = setInterval(loadAlerts, 15000);
+    const interval = setInterval(loadAlerts, 60000);
     return () => clearInterval(interval);
   }, [loadAlerts]);
 
