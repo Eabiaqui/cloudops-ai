@@ -4,11 +4,17 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker, declarative_base
 from sqlalchemy.pool import NullPool
 import os
+from pathlib import Path
 
 # Connection string — SQLite for MVP, PostgreSQL for production
+# Create data directory if it doesn't exist
+DATA_DIR = Path(__file__).parent.parent.parent / "data"
+DATA_DIR.mkdir(exist_ok=True)
+DB_FILE = DATA_DIR / "cloudops_ai.db"
+
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "sqlite:///./cloudops_ai.db"  # Local file-based SQLite
+    f"sqlite:///{DB_FILE}"  # Absolute path to data/cloudops_ai.db
 )
 
 # Create engine (no connection pooling for simplicity in MVP)

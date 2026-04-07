@@ -9,3 +9,14 @@ dist/
 logs/*.log
 .mypy_cache/
 .ruff_cache/
+
+# Database
+data/
+cloudops_ai.db
+*.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
