@@ -14,6 +14,7 @@ from cloudops_ai.agents.classifier import classify_alert
 from cloudops_ai.agents.diagnostics import diagnose, DIAGNOSABLE
 from cloudops_ai.api_v1 import router as api_v1_router
 from cloudops_ai.config import settings
+from cloudops_ai.db import init_db
 from cloudops_ai.logging import configure_logging
 from cloudops_ai.models.alert import AlertPayload
 
@@ -27,6 +28,7 @@ MAX_RECENT = 100
 @asynccontextmanager
 async def lifespan(app: FastAPI):  # type: ignore[type-arg]
     configure_logging(settings.log_level)
+    init_db()  # Initialize database on startup
     log.info("cloudops_ai.started", env=settings.app_env, port=settings.app_port)
     yield
     log.info("cloudops_ai.stopped")

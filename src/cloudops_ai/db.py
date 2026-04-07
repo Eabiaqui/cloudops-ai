@@ -5,10 +5,10 @@ from sqlalchemy.orm import sessionmaker, declarative_base
 from sqlalchemy.pool import NullPool
 import os
 
-# Connection string
+# Connection string — SQLite for MVP, PostgreSQL for production
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql+psycopg://postgres@localhost:5432/cloudops_ai"
+    "sqlite:///./cloudops_ai.db"  # Local file-based SQLite
 )
 
 # Create engine (no connection pooling for simplicity in MVP)
@@ -34,11 +34,19 @@ def get_db():
 
 def init_db():
     """Initialize database (create tables if not exist)."""
+    # Import models to register them with Base
+    from cloudops_ai.models import orm  # noqa: F401
     Base.metadata.create_all(bind=engine)
 
 @event.listens_for(engine, "connect")
 def set_sqlite_pragma(dbapi_conn, connection_record):
-    """Set connection timezone to UTC (PostgreSQL specific)."""
-    cursor = dbapi_conn.cursor()
-    cursor.execute("SET timezone TO 'UTC'")
-    cursor.close()
+    """Enable foreign keys and set pragmas for SQLite."""
+    if DATABASE_URL.startswith("sqlite:"):
+        cursor = dbapi_conn.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+    else:
+        # PostgreSQL — set timezone
+        cursor = dbapi_conn.cursor()
+        cursor.execute("SET timezone TO 'UTC'")
+        cursor.close()

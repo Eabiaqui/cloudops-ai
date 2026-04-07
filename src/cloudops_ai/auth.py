@@ -12,7 +12,14 @@ SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key-change-in-production")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 1 day
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Use argon2 (no byte limit like bcrypt), fallback to bcrypt
+pwd_context = CryptContext(
+    schemes=["argon2", "bcrypt"],
+    deprecated="auto",
+    argon2__memory_cost=65540,
+    argon2__time_cost=3,
+    argon2__parallelism=2,
+)
 
 class TokenData(BaseModel):
     tenant_id: str

@@ -2,13 +2,16 @@
 
 from datetime import datetime
 from typing import Optional
-from uuid import UUID
-from sqlalchemy import Column, String, DateTime, Boolean, Float, Integer, ForeignKey, Index, Enum, Date, func
-from sqlalchemy.dialects.postgresql import UUID as PG_UUID, JSONB
+from uuid import UUID, uuid4
+from sqlalchemy import Column, String, DateTime, Boolean, Float, Integer, ForeignKey, Index, Enum, Date, func, JSON
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 import enum
 
 from cloudops_ai.db import Base
+
+# Cross-compatible UUID column (String for SQLite, UUID for PostgreSQL)
+UUID_COLUMN = String(36)  # UUID as string for SQLite compatibility
 
 # ============================================================================
 # ENUMS
@@ -58,7 +61,7 @@ class Tenant(Base):
     """Enterprise account."""
     __tablename__ = "tenants"
 
-    id = Column(PG_UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
+    id = Column(UUID_COLUMN, primary_key=True, default=lambda: str(uuid4()))
     name = Column(String(255), nullable=False)
     api_key = Column(String(255), unique=True, nullable=False)
     plan = Column(String(50), default="free")
@@ -83,8 +86,8 @@ class User(Base):
     """User account (tenant member)."""
     __tablename__ = "users"
 
-    id = Column(PG_UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
-    tenant_id = Column(PG_UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    id = Column(UUID_COLUMN, primary_key=True, default=lambda: str(uuid4()))
+    tenant_id = Column(UUID_COLUMN, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
     email = Column(String(255), nullable=False)
     password_hash = Column(String(255), nullable=False)
     role = Column(String(50), default="member")
@@ -103,8 +106,8 @@ class AzureConfig(Base):
     """Azure Monitor credentials."""
     __tablename__ = "azure_configs"
 
-    id = Column(PG_UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
-    tenant_id = Column(PG_UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, unique=True)
+    id = Column(UUID_COLUMN, primary_key=True, default=lambda: str(uuid4()))
+    tenant_id = Column(UUID_COLUMN, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, unique=True)
     subscription_id = Column(String(255), nullable=False)
     client_id = Column(String(255), nullable=False)
     client_secret_encrypted = Column(String(500), nullable=False)
@@ -118,8 +121,8 @@ class SlackConfig(Base):
     """Slack workspace integration."""
     __tablename__ = "slack_configs"
 
-    id = Column(PG_UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
-    tenant_id = Column(PG_UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, unique=True)
+    id = Column(UUID_COLUMN, primary_key=True, default=lambda: str(uuid4()))
+    tenant_id = Column(UUID_COLUMN, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, unique=True)
     workspace_id = Column(String(255), nullable=False)
     webhook_url = Column(String(500), nullable=False)
     channel_id = Column(String(255), nullable=True)
@@ -135,14 +138,14 @@ class Alert(Base):
     """Alert from monitoring system."""
     __tablename__ = "alerts"
 
-    id = Column(PG_UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
-    tenant_id = Column(PG_UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    id = Column(UUID_COLUMN, primary_key=True, default=lambda: str(uuid4()))
+    tenant_id = Column(UUID_COLUMN, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
     alert_id_external = Column(String(255), nullable=True)
     rule_name = Column(String(255), nullable=False)
     category = Column(String(50), nullable=True)
     confidence = Column(Float, default=0.0)
     severity = Column(String(50), nullable=True)
-    payload_raw = Column(JSONB, nullable=False)
+    payload_raw = Column(JSON, nullable=False)  # JSONB for PostgreSQL, JSON for SQLite
     status = Column(String(50), default="new")
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     resolved_at = Column(DateTime, nullable=True)
@@ -162,11 +165,11 @@ class Diagnosis(Base):
     """AI diagnosis of an alert."""
     __tablename__ = "diagnoses"
 
-    id = Column(PG_UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
-    tenant_id = Column(PG_UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
-    alert_id = Column(PG_UUID(as_uuid=True), ForeignKey("alerts.id", ondelete="CASCADE"), nullable=False)
+    id = Column(UUID_COLUMN, primary_key=True, default=lambda: str(uuid4()))
+    tenant_id = Column(UUID_COLUMN, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    alert_id = Column(UUID_COLUMN, ForeignKey("alerts.id", ondelete="CASCADE"), nullable=False)
     diagnosis = Column(String, nullable=False)
-    evidence = Column(JSONB, default=list, nullable=False)
+    evidence = Column(JSON, default=list, nullable=False)  # JSONB for PostgreSQL, JSON for SQLite
     suggested_action = Column(String, nullable=False)
     confidence = Column(Float, default=0.0)
     model_used = Column(String(50), default="claude-haiku")
@@ -185,9 +188,9 @@ class SlackNotification(Base):
     """Track Slack notifications sent."""
     __tablename__ = "slack_notifications"
 
-    id = Column(PG_UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
-    tenant_id = Column(PG_UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
-    alert_id = Column(PG_UUID(as_uuid=True), ForeignKey("alerts.id", ondelete="CASCADE"), nullable=False)
+    id = Column(UUID_COLUMN, primary_key=True, default=lambda: str(uuid4()))
+    tenant_id = Column(UUID_COLUMN, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    alert_id = Column(UUID_COLUMN, ForeignKey("alerts.id", ondelete="CASCADE"), nullable=False)
     slack_ts = Column(String(255), nullable=True)
     status = Column(String(50), default="sent")
     error_message = Column(String, nullable=True)
@@ -204,8 +207,8 @@ class APIKey(Base):
     """API key for webhook authentication."""
     __tablename__ = "api_keys"
 
-    id = Column(PG_UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
-    tenant_id = Column(PG_UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    id = Column(UUID_COLUMN, primary_key=True, default=lambda: str(uuid4()))
+    tenant_id = Column(UUID_COLUMN, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
     key_hash = Column(String(255), unique=True, nullable=False)
     description = Column(String(255), nullable=True)
     last_used_at = Column(DateTime, nullable=True)
@@ -221,13 +224,13 @@ class AuditLog(Base):
     """Audit trail for compliance."""
     __tablename__ = "audit_logs"
 
-    id = Column(PG_UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
-    tenant_id = Column(PG_UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
-    user_id = Column(PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    id = Column(UUID_COLUMN, primary_key=True, default=lambda: str(uuid4()))
+    tenant_id = Column(UUID_COLUMN, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(UUID_COLUMN, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     action = Column(String(100), nullable=False)
     resource_type = Column(String(50), nullable=True)
     resource_id = Column(String(255), nullable=True)
-    details = Column(JSONB, nullable=True)
+    details = Column(JSON, nullable=True)  # JSONB for PostgreSQL, JSON for SQLite
     ip_address = Column(String(45), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
@@ -240,8 +243,8 @@ class Usage(Base):
     """Monthly usage tracking for billing."""
     __tablename__ = "usage"
 
-    id = Column(PG_UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
-    tenant_id = Column(PG_UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, unique=True)
+    id = Column(UUID_COLUMN, primary_key=True, default=lambda: str(uuid4()))
+    tenant_id = Column(UUID_COLUMN, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, unique=True)
     alerts_processed = Column(Integer, default=0)
     diagnoses_generated = Column(Integer, default=0)
     month_year = Column(Date, nullable=False)
