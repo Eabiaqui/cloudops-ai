@@ -123,7 +123,8 @@ async def receive_alert(
 
     # Store in DB
     alert = Alert(
-        tenant_id=UUID(tenant_id),
+        id=str(UUID()),  # Generate UUID as string for SQLite
+        tenant_id=tenant_id,  # Already a string from Depends
         alert_id_external=classified.essentials.alert_id,
         rule_name=classified.essentials.alert_rule,
         category=classified.category,
@@ -155,7 +156,7 @@ def list_alerts(
 ):
     """List recent alerts for tenant."""
     alerts = db.query(Alert).filter(
-        Alert.tenant_id == UUID(tenant_id)
+        Alert.tenant_id == tenant_id  # tenant_id is already a string from SQLite
     ).order_by(Alert.created_at.desc()).offset(skip).limit(limit).all()
 
     return {
@@ -181,8 +182,8 @@ def get_alert(
 ):
     """Get single alert with diagnosis."""
     alert = db.query(Alert).filter(
-        Alert.id == UUID(alert_id),
-        Alert.tenant_id == UUID(tenant_id),
+        Alert.id == alert_id,  # String UUID from SQLite
+        Alert.tenant_id == tenant_id,  # String UUID from SQLite
     ).first()
 
     if not alert:
