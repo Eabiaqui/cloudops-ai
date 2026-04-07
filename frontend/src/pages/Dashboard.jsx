@@ -182,13 +182,24 @@ export default function Dashboard() {
               <p className="text-gray-400 text-sm mt-1">Monitoreo en tiempo real de alertas</p>
             </div>
             <div className="flex gap-2">
-              
-                href={`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/v1/inventory/export?format=csv`}
-                download
+              <button
+                onClick={() => {
+                  const base = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+                  const token = localStorage.getItem('token');
+                  fetch(`${base}/api/v1/inventory/export?format=csv`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                  }).then(r => r.blob()).then(blob => {
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'qhunu-inventory.csv';
+                    a.click();
+                  });
+                }}
                 className="flex items-center gap-2 px-4 py-2 text-sm bg-green-700 hover:bg-green-600 text-white rounded-lg transition"
               >
-                ⬇ Exportar inventario
-              </a>
+                Exportar CSV
+              </button>
               <button
                 onClick={loadAlerts}
                 disabled={loading}
