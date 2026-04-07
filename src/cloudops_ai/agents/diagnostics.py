@@ -1,15 +1,12 @@
 """Diagnostics agent — runs after classification for availability + cpu_pressure."""
 
-import json
-import re
 from typing import TypedDict
 
 import structlog
-from langchain_anthropic import ChatAnthropic
-from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph import END, StateGraph
 
 from cloudops_ai.config import settings
+from cloudops_ai.llm import call_llm, extract_json_from_response
 from cloudops_ai.models.alert import AlertCategory, ClassifiedAlert
 from cloudops_ai.models.diagnosis import DiagnosisResult
 from cloudops_ai.prompts.diagnostics import (
@@ -26,6 +23,7 @@ from cloudops_ai.tools.azure_real import (
 )
 
 log = structlog.get_logger()
+log.info("diagnostics.init", llm_backend=settings.llm_backend)
 
 DIAGNOSABLE = {AlertCategory.AVAILABILITY, AlertCategory.CPU_PRESSURE}
 
@@ -42,7 +40,7 @@ class DiagnosticsState(TypedDict):
 
 # ── Nodes ──────────────────────────────────────────────────────────────────────
 
-def gather_telemetry(state: DiagnosticsState) -> DiagnosticsState:
+async def gather_telemetry(state: DiagnosticsState) -> DiagnosticsState:
     """Fetch relevant telemetry based on alert category."""
     classified = state["classified"]
     resource_id = classified.essentials.affected_resource_str
@@ -73,7 +71,7 @@ def gather_telemetry(state: DiagnosticsState) -> DiagnosticsState:
     return state
 
 
-def build_prompt(state: DiagnosticsState) -> DiagnosticsState:
+async def build_prompt(state: DiagnosticsState) -> DiagnosticsState:
     """Assemble the LLM prompt from gathered telemetry."""
     classified = state["classified"]
     telemetry = state["telemetry"]
@@ -122,27 +120,17 @@ def build_prompt(state: DiagnosticsState) -> DiagnosticsState:
     return state
 
 
-def call_llm(state: DiagnosticsState) -> DiagnosticsState:
-    """Call Claude Haiku with the assembled prompt."""
+async def call_llm_node(state: DiagnosticsState) -> DiagnosticsState:
+    """Call LLM (Anthropic or Ollama) with the assembled prompt."""
     classified = state["classified"]
 
-    llm = ChatAnthropic(
-        model=settings.classifier_model,  # reuse haiku
-        api_key=settings.anthropic_api_key,
-        max_tokens=256,
-    )
-
     try:
-        response = llm.invoke([
-            SystemMessage(content=SYSTEM_PROMPT),
-            HumanMessage(content=state["user_prompt"]),
-        ])
-        raw = str(response.content)
-        match = re.search(r"\{.*\}", raw, re.DOTALL)
-        if not match:
-            raise ValueError(f"No JSON in LLM response: {raw}")
-
-        llm_out: dict = json.loads(match.group())
+        raw = await call_llm(
+            system_prompt=SYSTEM_PROMPT,
+            user_prompt=state["user_prompt"],
+            max_tokens=256,
+        )
+        llm_out = extract_json_from_response(raw)
 
         alert_id = classified.essentials.alert_id or classified.essentials.alert_rule
         summary = (
@@ -164,6 +152,7 @@ def call_llm(state: DiagnosticsState) -> DiagnosticsState:
             alert_id=alert_id,
             diagnosis=state["result"].diagnosis,
             confidence=state["result"].confidence,
+            llm_backend=settings.llm_backend,
         )
 
     except Exception as exc:
@@ -179,7 +168,7 @@ def _build_graph():
     graph = StateGraph(DiagnosticsState)
     graph.add_node("gather_telemetry", gather_telemetry)
     graph.add_node("build_prompt", build_prompt)
-    graph.add_node("call_llm", call_llm)
+    graph.add_node("call_llm", call_llm_node)
     graph.set_entry_point("gather_telemetry")
     graph.add_edge("gather_telemetry", "build_prompt")
     graph.add_edge("build_prompt", "call_llm")

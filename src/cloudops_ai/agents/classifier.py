@@ -1,15 +1,12 @@
 """Alert classification pipeline using LangGraph (T4-T8)."""
 
-import json
-import re
 from typing import Any, TypedDict
 
 import structlog
-from langchain_anthropic import ChatAnthropic
-from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph import END, StateGraph
 
 from cloudops_ai.config import settings
+from cloudops_ai.llm import call_llm, extract_json_from_response
 from cloudops_ai.models.alert import (
     AlertCategory,
     AlertPayload,
@@ -19,6 +16,7 @@ from cloudops_ai.models.alert import (
 from cloudops_ai.prompts.classifier import SYSTEM_PROMPT, USER_PROMPT_TEMPLATE
 
 log = structlog.get_logger()
+log.info("classifier.init", llm_backend=settings.llm_backend)
 
 _SEVERITY_MAP: dict[str, Severity] = {
     "Sev0": Severity.CRITICAL,
@@ -39,7 +37,7 @@ class ClassifierState(TypedDict):
 
 # ── Nodes ──────────────────────────────────────────────────────────────────────
 
-def normalize_alert(state: ClassifierState) -> ClassifierState:
+async def normalize_alert(state: ClassifierState) -> ClassifierState:
     """T4: Parse raw payload, extract essentials, normalize severity."""
     payload = state["payload"]
     essentials = payload.get_essentials()
@@ -54,7 +52,7 @@ def normalize_alert(state: ClassifierState) -> ClassifierState:
     return state
 
 
-def enrich_context(state: ClassifierState) -> ClassifierState:
+async def enrich_context(state: ClassifierState) -> ClassifierState:
     """T5: Add context to alert before classification."""
     # MVP: enrichment is basic (just logs). Future: fetch Azure metrics here.
     classified = state["classified"]
@@ -67,8 +65,8 @@ def enrich_context(state: ClassifierState) -> ClassifierState:
     return state
 
 
-def classify_with_llm(state: ClassifierState) -> ClassifierState:
-    """T6-T7: Call Claude Haiku to classify the alert."""
+async def classify_with_llm(state: ClassifierState) -> ClassifierState:
+    """T6-T7: Call LLM (Anthropic or Ollama) to classify the alert."""
     classified = state["classified"]
     if not classified:
         state["error"] = "No classified alert to process"
@@ -83,24 +81,14 @@ def classify_with_llm(state: ClassifierState) -> ClassifierState:
         description=e.description or "N/A",
     )
 
-    llm = ChatAnthropic(
-        model=settings.classifier_model,
-        api_key=settings.anthropic_api_key,
-        max_tokens=settings.classifier_max_tokens,
-    )
-
     try:
-        response = llm.invoke([
-            SystemMessage(content=SYSTEM_PROMPT),
-            HumanMessage(content=user_msg),
-        ])
-        raw = response.content
-        # Extract JSON from response (handles markdown code blocks too)
-        json_match = re.search(r"\{.*\}", str(raw), re.DOTALL)
-        if not json_match:
-            raise ValueError(f"No JSON found in LLM response: {raw}")
+        raw = await call_llm(
+            system_prompt=SYSTEM_PROMPT,
+            user_prompt=user_msg,
+            max_tokens=settings.classifier_max_tokens,
+        )
+        result = extract_json_from_response(raw)
 
-        result: dict[str, Any] = json.loads(json_match.group())
         classified.category = AlertCategory(result.get("category", "unknown"))
         classified.confidence = float(result.get("confidence", 0.0))
         classified.reasoning = result.get("reasoning", "")
@@ -110,6 +98,7 @@ def classify_with_llm(state: ClassifierState) -> ClassifierState:
             category=classified.category,
             confidence=classified.confidence,
             reasoning=classified.reasoning,
+            llm_backend=settings.llm_backend,
         )
     except Exception as exc:
         log.error("alert.classification_failed", error=str(exc))

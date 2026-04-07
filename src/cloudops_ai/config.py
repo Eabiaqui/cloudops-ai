@@ -6,8 +6,15 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
-    # Anthropic
-    anthropic_api_key: str
+    # LLM Backend ("anthropic" or "ollama")
+    llm_backend: str = "ollama"  # Default to Ollama
+
+    # Anthropic (only used if llm_backend == "anthropic")
+    anthropic_api_key: str = ""
+
+    # Ollama (only used if llm_backend == "ollama")
+    ollama_base_url: str = "http://localhost:11434"
+    ollama_model: str = "qwen2.5-coder:7b"  # lightweight for classification
 
     # Azure
     azure_tenant_id: str = ""
@@ -22,7 +29,7 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     webhook_secret: str = "change-me-in-production"
 
-    # LLM
+    # LLM (legacy, kept for backward compat)
     classifier_model: str = "claude-haiku-4-5"
     classifier_max_tokens: int = 128  # clasificación es corta
 
