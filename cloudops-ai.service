@@ -1,0 +1,17 @@
+[Unit]
+Description=CloudOps AI — Autonomous NOC Agent
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/cloudops-ai
+EnvironmentFile=/home/ubuntu/cloudops-ai/.env
+ExecStart=/home/ubuntu/cloudops-ai/.venv/bin/python -m cloudops_ai
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
