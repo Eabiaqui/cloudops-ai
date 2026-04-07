@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 
 from cloudops_ai.agents.classifier import classify_alert
 from cloudops_ai.agents.diagnostics import diagnose, DIAGNOSABLE
+from cloudops_ai.api_v1 import router as api_v1_router
 from cloudops_ai.config import settings
 from cloudops_ai.logging import configure_logging
 from cloudops_ai.models.alert import AlertPayload
@@ -37,6 +38,9 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Include v1 API routes
+app.include_router(api_v1_router)
+
 
 def _verify_webhook_secret(body: bytes, signature: str | None) -> None:
     """Optional HMAC verification for Azure Monitor webhook."""
@@ -51,6 +55,7 @@ def _verify_webhook_secret(body: bytes, signature: str | None) -> None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid signature")
 
 
+# Legacy health endpoint (also in v1)
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok", "version": "0.1.0"}
@@ -58,6 +63,7 @@ async def health() -> dict[str, str]:
 
 @app.get("/alerts/recent")
 async def recent_alerts() -> list[dict[str, Any]]:
+    """Legacy endpoint (use /api/v1/alerts instead)."""
     return _recent_alerts[-MAX_RECENT:]
 
 
