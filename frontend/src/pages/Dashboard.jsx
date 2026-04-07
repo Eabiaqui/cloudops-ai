@@ -92,9 +92,16 @@ export default function Dashboard() {
     setLoadingDetail(true);
     try {
       const result = await api.getAlert(alertId);
-      setSelected(result.data);
+      if (result && result.data) {
+        setSelected(result.data);
+      }
     } catch (err) {
       console.error('Error loading alert detail:', err);
+      if (err.cachedData) {
+        setSelected(err.cachedData);
+      } else {
+        setSelected(null);
+      }
     } finally {
       setLoadingDetail(false);
     }

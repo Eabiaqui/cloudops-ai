@@ -20,6 +20,54 @@ client.interceptors.request.use((config) => {
   return config;
 });
 
+// Response interceptor: handle JSON parse errors gracefully
+client.interceptors.response.use(
+  (response) => {
+    // Cache successful responses for fallback
+    try {
+      const cacheKey = `api_cache_${response.config.url}`;
+      sessionStorage.setItem(cacheKey, JSON.stringify(response.data));
+    } catch (e) {
+      // Silently skip cache if storage fails
+    }
+    return response;
+  },
+  (error) => {
+    if (error.response) {
+      // Server responded with error status
+      try {
+        // Try to extract error detail from response
+        const detail = error.response.data?.detail || error.response.statusText;
+        error.message = `[${error.response.status}] ${detail}`;
+      } catch (e) {
+        // If response body is not JSON, use generic message
+        error.message = `[${error.response.status}] Server error`;
+      }
+    } else if (error.request) {
+      // Request was made but no response
+      error.message = 'No response from server. Check connection.';
+    } else {
+      // Error in request setup
+      error.message = error.message || 'Request failed';
+    }
+    
+    // Attach cached data if available (for fallback)
+    if (error.config && error.config.url) {
+      try {
+        const cacheKey = `api_cache_${error.config.url}`;
+        const cached = sessionStorage.getItem(cacheKey);
+        if (cached) {
+          error.cachedData = JSON.parse(cached);
+        }
+      } catch (e) {
+        // Ignore cache retrieval errors
+      }
+    }
+    
+    return Promise.reject(error);
+  }
+);
+
 export const api = {
   // Auth — query params format
   signup: (email, password, tenantName) =>
