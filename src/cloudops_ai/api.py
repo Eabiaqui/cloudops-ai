@@ -8,6 +8,7 @@ from typing import Any
 import structlog
 from fastapi import FastAPI, Header, HTTPException, Request, status
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 
 from cloudops_ai.agents.classifier import classify_alert
 from cloudops_ai.agents.diagnostics import diagnose, DIAGNOSABLE
@@ -36,6 +37,15 @@ app = FastAPI(
     version="0.1.0",
     description="Autonomous NOC alert classifier",
     lifespan=lifespan,
+)
+
+# CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins (dev) — restrict in prod
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Include v1 API routes
