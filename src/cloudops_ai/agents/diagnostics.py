@@ -17,7 +17,7 @@ from cloudops_ai.prompts.diagnostics import (
     CPU_USER_TEMPLATE,
     SYSTEM_PROMPT,
 )
-from cloudops_ai.tools.azure_mock import (
+from cloudops_ai.tools.azure_real import (
     get_cpu_metrics,
     get_node_status,
     get_pod_logs,
